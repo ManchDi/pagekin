@@ -2,9 +2,9 @@
 
 An interactive AI-powered children's storybook that generates illustrations, reads stories aloud, and lets kids ask questions about the story — all in real time.
 
-**[Live Demo →](#)** <!-- Replace with your Vercel URL -->
+**[Live Demo →](#)** <!-- Vercel URL -->
 
-![StoryTime AI Screenshot](#) <!-- Replace with a screenshot -->
+![StoryTime AI Screenshot](#) <!-- screenshot -->
 
 ---
 
@@ -47,7 +47,7 @@ StoryTime AI combines four AI-powered features into a seamless reading experienc
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/yourusername/storytime-ai.git
+git clone https://github.com/ManchDi/storytime-ai.git
 cd storytime-ai
 
 # 2. Install dependencies
