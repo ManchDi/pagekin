@@ -68,55 +68,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // ── Prefetch next 2 pages in background ───────────────────────────────────
-  const prefetchPages = useCallback(async (
-    config: StoryConfig,
-    currentIndex: number,
-    pages: StoryPage[]
-  ) => {
-    const targets = [currentIndex + 1, currentIndex + 2].filter(
-      i => i < config.pageCount && !pages[i]
-    );
-
-    for (const targetIndex of targets) {
-      // Mark as generating
-      setStoryPages(prev => {
-        if (prev[targetIndex]) return prev;
-        const updated = [...prev];
-        updated[targetIndex] = { id: targetIndex + 1, text: '', imagePrompt: '', isGenerating: true };
-        return updated;
-      });
-
-      try {
-        const currentPages = storyPages.slice(0, targetIndex);
-        const previousTexts = currentPages.map(p => p.text).filter(Boolean);
-        const newPage = await generateNextPage(config, targetIndex, currentPages);
-        if (!newPage) continue;
-
-        setStoryPages(prev => {
-          const updated = [...prev];
-          updated[targetIndex] = newPage;
-          return updated;
-        });
-
-        // Also prefetch the image in background
-        generateImage(newPage.imagePrompt).then(imageUrl => {
-          setStoryPages(prev => {
-            const updated = [...prev];
-            if (updated[targetIndex]) {
-              updated[targetIndex] = { ...updated[targetIndex], imageUrl };
-            }
-            return updated;
-          });
-        }).catch(err => console.error('Background image prefetch failed:', err));
-
-      } catch (error) {
-        console.error(`Prefetch failed for page ${targetIndex}:`, error);
-      }
-    }
-  }, [storyPages, generateNextPage]);
-
-  // ── Story generation ───────────────────────────────────────────────────────
+  // ── Story generation (must come before prefetchPages) ─────────────────────
   const loadImageForPage = useCallback(async (pageIndex: number, pages: StoryPage[]) => {
     if (pages[pageIndex]?.imageUrl) return;
     setIsLoadingImage(true);
@@ -149,6 +101,52 @@ const App: React.FC = () => {
     }
   }, [handleQuotaError]);
 
+  // ── Prefetch next 2 pages in background (after generateNextPage) ──────────
+  const prefetchPages = useCallback(async (
+    config: StoryConfig,
+    currentIndex: number,
+    pages: StoryPage[]
+  ) => {
+    const targets = [currentIndex + 1, currentIndex + 2].filter(
+      i => i < config.pageCount && !pages[i]
+    );
+
+    for (const targetIndex of targets) {
+      setStoryPages(prev => {
+        if (prev[targetIndex]) return prev;
+        const updated = [...prev];
+        updated[targetIndex] = { id: targetIndex + 1, text: '', imagePrompt: '', isGenerating: true };
+        return updated;
+      });
+
+      try {
+        const previousPages = pages.slice(0, targetIndex);
+        const newPage = await generateNextPage(config, targetIndex, previousPages);
+        if (!newPage) continue;
+
+        setStoryPages(prev => {
+          const updated = [...prev];
+          updated[targetIndex] = newPage;
+          return updated;
+        });
+
+        // Prefetch image in background — don't await
+        generateImage(newPage.imagePrompt).then(imageUrl => {
+          setStoryPages(prev => {
+            const updated = [...prev];
+            if (updated[targetIndex]) {
+              updated[targetIndex] = { ...updated[targetIndex], imageUrl };
+            }
+            return updated;
+          });
+        }).catch(err => console.error('Background image prefetch failed:', err));
+
+      } catch (error) {
+        console.error(`Prefetch failed for page ${targetIndex}:`, error);
+      }
+    }
+  }, [generateNextPage]);
+
   // ── Handle "Generate Story" click ─────────────────────────────────────────
   const handleGenerate = useCallback(async (config: StoryConfig) => {
     setStoryConfig(config);
@@ -157,7 +155,6 @@ const App: React.FC = () => {
     setCurrentPageIndex(0);
     setChatHistory([]);
 
-    // Generate first page text
     const firstPage = await generateNextPage(config, 0, []);
     if (!firstPage) {
       setScreen('home');
@@ -168,10 +165,9 @@ const App: React.FC = () => {
     setStoryPages(initialPages);
     setScreen('story');
 
-    // Load first page image then prefetch page 2
     await loadImageForPage(0, initialPages);
     prefetchPages(config, 0, initialPages);
-  }, [generateNextPage, loadImageForPage]);
+  }, [generateNextPage, loadImageForPage, prefetchPages]);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   const handleNextPage = useCallback(async () => {
@@ -182,11 +178,12 @@ const App: React.FC = () => {
     stopReading();
     handleStopRecording();
 
-    // If next page doesn't exist yet, generate it
-    if (!storyPages[nextIndex]) {
+    if (!storyPages[nextIndex] || storyPages[nextIndex].isGenerating) {
       setStoryPages(prev => {
         const updated = [...prev];
-        updated[nextIndex] = { id: nextIndex + 1, text: '', imagePrompt: '', isGenerating: true };
+        if (!updated[nextIndex]) {
+          updated[nextIndex] = { id: nextIndex + 1, text: '', imagePrompt: '', isGenerating: true };
+        }
         return updated;
       });
       setCurrentPageIndex(nextIndex);
@@ -200,14 +197,15 @@ const App: React.FC = () => {
         return updated;
       });
 
-      await loadImageForPage(nextIndex, [...storyPages.slice(0, nextIndex), newPage]);
-      prefetchPages(storyConfig, nextIndex, [...storyPages.slice(0, nextIndex), newPage]);
+      const pagesWithNew = [...storyPages.slice(0, nextIndex), newPage];
+      await loadImageForPage(nextIndex, pagesWithNew);
+      prefetchPages(storyConfig, nextIndex, pagesWithNew);
     } else {
       setCurrentPageIndex(nextIndex);
       await loadImageForPage(nextIndex, storyPages);
       prefetchPages(storyConfig, nextIndex, storyPages);
     }
-  }, [currentPageIndex, storyConfig, storyPages, stopReading, handleStopRecording, generateNextPage, loadImageForPage]);
+  }, [currentPageIndex, storyConfig, storyPages, stopReading, handleStopRecording, generateNextPage, loadImageForPage, prefetchPages]);
 
   const handlePrevPage = useCallback(() => {
     if (currentPageIndex <= 0) return;
@@ -389,7 +387,6 @@ const App: React.FC = () => {
         />
       </footer>
 
-      {/* Chatbot */}
       <button
         onClick={() => setIsChatOpen(!isChatOpen)}
         className="fixed bottom-6 right-6 bg-orange-400 hover:bg-orange-500 text-white p-4 rounded-full shadow-lg transform hover:scale-110 transition-transform duration-200 z-50"
