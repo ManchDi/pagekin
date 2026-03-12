@@ -1,7 +1,7 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { ChatMessage } from "../types";
+import { ChatMessage, StoryConfig } from "../types";
 
-// ─── Audio helpers (used for direct API path only) ───────────────────────────
+// ─── Audio helpers ────────────────────────────────────────────────────────────
 
 function decode(base64: string): Uint8Array {
   const binaryString = atob(base64);
@@ -22,11 +22,7 @@ function buildAudioBuffer(data: Uint8Array, ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
-// ─── Core API caller ──────────────────────────────────────────────────────────
-// Tries the Vercel proxy first (free tier, key stays server-side).
-// If the proxy returns 429 (quota exceeded), throws a QuotaError so the UI
-// can prompt the user for their own key.
-// If the user has supplied their own key, skips the proxy entirely.
+// ─── Quota error ──────────────────────────────────────────────────────────────
 
 export class QuotaError extends Error {
   constructor() {
@@ -41,23 +37,38 @@ async function callProxy(endpoint: string, body: object): Promise<Response> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
   if (res.status === 429) throw new QuotaError();
   if (!res.ok) throw new Error(`Proxy error: ${res.statusText}`);
   return res;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Story generation ─────────────────────────────────────────────────────────
 
-export const generateImage = async (
-  prompt: string,
-  userApiKey?: string
-): Promise<string> => {
-  // For the proxy path, HuggingFace handles image gen — userApiKey not needed for images
+export const generateStoryPage = async (
+  config: StoryConfig,
+  pageIndex: number,
+  previousPages: string[]
+): Promise<{ text: string; imagePrompt: string }> => {
+  const res = await callProxy("generate-story", {
+    childName: config.childName,
+    theme: config.theme,
+    pageCount: config.pageCount,
+    includeChild: config.includeChild,
+    pageIndex,
+    previousPages,
+  });
+  return res.json();
+};
+
+// ─── Image generation ─────────────────────────────────────────────────────────
+
+export const generateImage = async (prompt: string): Promise<string> => {
   const res = await callProxy("generate-image", { prompt });
   const { imageBytes, mimeType } = await res.json();
   return `data:${mimeType};base64,${imageBytes}`;
 };
+
+// ─── Speech generation ────────────────────────────────────────────────────────
 
 export const generateSpeech = async (
   text: string,
@@ -70,7 +81,6 @@ export const generateSpeech = async (
   let base64Audio: string;
 
   if (userApiKey) {
-    // Direct path
     const ai = new GoogleGenAI({ apiKey: userApiKey });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -82,7 +92,6 @@ export const generateSpeech = async (
     });
     base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ?? "";
   } else {
-    // Proxy path
     const res = await callProxy("generate-speech", { text });
     const data = await res.json();
     base64Audio = data.audioData;
@@ -92,12 +101,13 @@ export const generateSpeech = async (
   return buildAudioBuffer(decode(base64Audio), ctx);
 };
 
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
 export const getChatResponse = async (
   history: ChatMessage[],
   userApiKey?: string
 ): Promise<string> => {
   if (userApiKey) {
-    // Direct path — reconstruct conversation with full history
     const ai = new GoogleGenAI({ apiKey: userApiKey });
     const contents = history.map((msg) => ({
       role: msg.role,
@@ -114,7 +124,6 @@ export const getChatResponse = async (
     return response.text;
   }
 
-  // Proxy path
   const res = await callProxy("chat", { history });
   const data = await res.json();
   return data.text;

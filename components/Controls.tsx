@@ -1,5 +1,8 @@
 import React from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, PlayIcon, StopIcon, MicrophoneIcon, ArrowPathIcon, TrashIcon } from '@heroicons/react/24/solid';
+import {
+  ChevronLeftIcon, ChevronRightIcon, PlayIcon, StopIcon,
+  MicrophoneIcon, ArrowPathIcon, TrashIcon, HomeIcon,
+} from '@heroicons/react/24/solid';
 
 interface ControlsProps {
   onPrev: () => void;
@@ -7,95 +10,118 @@ interface ControlsProps {
   onReadAloud: () => void;
   onToggleRecording: () => void;
   onDeleteRecording: () => void;
+  onGoHome: () => void;
   isReading: boolean;
+  isLoadingTTS: boolean;
   isRecording: boolean;
   hasRecording: boolean;
   hasPrev: boolean;
   hasNext: boolean;
   isImageLoading: boolean;
+  isPageGenerating: boolean;
 }
 
-const ControlButton: React.FC<{ onClick: () => void; disabled: boolean; children: React.ReactNode; className?: string }> = ({ onClick, disabled, children, className = '' }) => (
+const ControlButton: React.FC<{
+  onClick: () => void;
+  disabled: boolean;
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+}> = ({ onClick, disabled, children, className = '', title }) => (
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`px-6 py-3 rounded-full text-white font-bold text-lg shadow-md transform transition-transform duration-200 flex items-center gap-2 focus:outline-none focus:ring-4 focus:ring-opacity-50 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100 ${className}`}
+    title={title}
+    className={`px-4 py-3 rounded-full text-white font-bold shadow-md transform transition-transform duration-200 flex items-center gap-2 focus:outline-none focus:ring-4 focus:ring-opacity-50 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100 ${className}`}
   >
     {children}
   </button>
 );
 
+const Controls: React.FC<ControlsProps> = ({
+  onPrev, onNext, onReadAloud, onToggleRecording, onDeleteRecording, onGoHome,
+  isReading, isLoadingTTS, isRecording, hasRecording, hasPrev, hasNext,
+  isImageLoading, isPageGenerating,
+}) => {
+  const isBusy = isImageLoading || isPageGenerating;
 
-const Controls: React.FC<ControlsProps> = ({ onPrev, onNext, onReadAloud, onToggleRecording, onDeleteRecording, isReading, isRecording, hasRecording, hasPrev, hasNext, isImageLoading }) => {
-  const getRecordButton = () => {
-    if (isRecording) {
-      return {
-        text: 'Stop',
-        icon: <StopIcon className="h-6 w-6" />,
-        color: 'bg-red-500 hover:bg-red-600 focus:ring-red-300'
-      };
-    }
-    if (hasRecording) {
-      return {
-        text: 'Re-record',
-        icon: <ArrowPathIcon className="h-6 w-6" />,
-        color: 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-300'
-      };
-    }
-    return {
-      text: 'Record',
-      icon: <MicrophoneIcon className="h-6 w-6" />,
-      color: 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-300'
-    };
+  const getReadButton = () => {
+    if (isLoadingTTS) return { text: 'Loading...', icon: <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />, color: 'bg-gray-400' };
+    if (isReading) return { text: 'Stop', icon: <StopIcon className="h-5 w-5" />, color: 'bg-red-500 hover:bg-red-600 focus:ring-red-300' };
+    return { text: 'Read', icon: <PlayIcon className="h-5 w-5" />, color: 'bg-green-500 hover:bg-green-600 focus:ring-green-300' };
   };
 
-  const recordButton = getRecordButton();
+  const getRecordButton = () => {
+    if (isRecording) return { text: 'Stop', icon: <StopIcon className="h-5 w-5" />, color: 'bg-red-500 hover:bg-red-600 focus:ring-red-300' };
+    if (hasRecording) return { text: 'Re-record', icon: <ArrowPathIcon className="h-5 w-5" />, color: 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-300' };
+    return { text: 'Record', icon: <MicrophoneIcon className="h-5 w-5" />, color: 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-300' };
+  };
+
+  const readBtn = getReadButton();
+  const recordBtn = getRecordButton();
 
   return (
-    <div className="flex justify-center items-center gap-2 sm:gap-4 flex-wrap">
-      <ControlButton onClick={onPrev} disabled={!hasPrev || isImageLoading || isReading || isRecording} className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300">
-        <ChevronLeftIcon className="h-6 w-6" />
-        Prev
-      </ControlButton>
-      
-      <ControlButton onClick={onReadAloud} disabled={isImageLoading || isRecording} className={`w-32 sm:w-40 justify-center ${isReading ? 'bg-red-500 hover:bg-red-600 focus:ring-red-300' : 'bg-green-500 hover:bg-green-600 focus:ring-green-300'}`}>
-        {isReading ? (
-          <>
-            <StopIcon className="h-6 w-6" />
-            Stop
-          </>
-        ) : (
-          <>
-            <PlayIcon className="h-6 w-6" />
-            Read
-          </>
-        )}
+    <div className="flex justify-center items-center gap-2 sm:gap-3 flex-wrap">
+      {/* Home */}
+      <ControlButton
+        onClick={onGoHome}
+        disabled={isRecording}
+        className="bg-gray-400 hover:bg-gray-500 focus:ring-gray-300"
+        title="New story"
+      >
+        <HomeIcon className="h-5 w-5" />
       </ControlButton>
 
+      {/* Prev */}
+      <ControlButton
+        onClick={onPrev}
+        disabled={!hasPrev || isBusy || isReading || isRecording}
+        className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300"
+      >
+        <ChevronLeftIcon className="h-5 w-5" />
+        Prev
+      </ControlButton>
+
+      {/* Read aloud */}
+      <ControlButton
+        onClick={onReadAloud}
+        disabled={isBusy || isRecording || isLoadingTTS && !isReading}
+        className={`w-32 justify-center ${readBtn.color}`}
+      >
+        {readBtn.icon}
+        {readBtn.text}
+      </ControlButton>
+
+      {/* Record */}
       <div className="flex items-center gap-2">
-        <ControlButton 
-          onClick={onToggleRecording} 
-          disabled={isImageLoading || isReading} 
-          className={`w-36 sm:w-40 justify-center ${recordButton.color}`}
+        <ControlButton
+          onClick={onToggleRecording}
+          disabled={isBusy || isReading || isLoadingTTS}
+          className={`w-36 justify-center ${recordBtn.color}`}
         >
-          {recordButton.icon}
-          {recordButton.text}
+          {recordBtn.icon}
+          {recordBtn.text}
         </ControlButton>
         {hasRecording && !isRecording && (
-          <button 
-            onClick={onDeleteRecording} 
-            disabled={isImageLoading || isReading}
-            className="p-3.5 rounded-full bg-gray-500 hover:bg-gray-600 text-white shadow-md transform transition-transform duration-200 focus:outline-none focus:ring-4 focus:ring-gray-300 disabled:bg-gray-400 disabled:shadow-none disabled:scale-100"
+          <button
+            onClick={onDeleteRecording}
+            disabled={isBusy || isReading}
+            className="p-3 rounded-full bg-gray-400 hover:bg-gray-500 text-white shadow-md transition-transform duration-200 focus:outline-none focus:ring-4 focus:ring-gray-300 disabled:opacity-50"
             aria-label="Delete recording"
           >
-            <TrashIcon className="h-6 w-6" />
+            <TrashIcon className="h-5 w-5" />
           </button>
         )}
       </div>
 
-      <ControlButton onClick={onNext} disabled={!hasNext || isImageLoading || isReading || isRecording} className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300">
+      {/* Next */}
+      <ControlButton
+        onClick={onNext}
+        disabled={!hasNext || isBusy || isReading || isRecording}
+        className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300"
+      >
         Next
-        <ChevronRightIcon className="h-6 w-6" />
+        <ChevronRightIcon className="h-5 w-5" />
       </ControlButton>
     </div>
   );
