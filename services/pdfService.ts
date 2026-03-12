@@ -22,7 +22,7 @@ async function drawImage(
       const ratio = Math.min(maxW / img.width, maxH / img.height);
       const w = img.width * ratio;
       const h = img.height * ratio;
-      doc.addImage(dataUrl, 'PNG', x + (maxW - w) / 2, y, w, h);
+      doc.addImage(dataUrl, 'PNG', x + (maxW - w) / 2, y + (maxH - h) / 2, w, h);
       resolve();
     };
     img.onerror = () => resolve();
@@ -30,18 +30,7 @@ async function drawImage(
   });
 }
 
-// Draw decorative dots instead of emoji stars
-function drawDots(doc: jsPDF, y: number) {
-  const cx = PAGE_W / 2;
-  const positions = [-16, -8, 0, 8, 16];
-  positions.forEach((offset, i) => {
-    const size = i === 2 ? 1.8 : 1.2;
-    doc.setFillColor(255, 255, 255);
-    doc.circle(cx + offset, y, size, 'F');
-  });
-}
-
-function drawCoverPage(doc: jsPDF, config: StoryConfig) {
+async function drawCoverPage(doc: jsPDF, config: StoryConfig, coverImageUrl?: string) {
   const cx = PAGE_W / 2;
 
   // Background
@@ -52,14 +41,11 @@ function drawCoverPage(doc: jsPDF, config: StoryConfig) {
   doc.setFillColor(PURPLE_R, PURPLE_G, PURPLE_B);
   doc.rect(0, 0, PAGE_W, 20, 'F');
 
-  // "Pagekin" text in top band
+  // "Pagekin" text in top band — plain text, no emoji
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Pagekin', cx, 13, { align: 'center' });
-
-  // Dots in top band
-  drawDots(doc, 13);
 
   // Title
   doc.setTextColor(PURPLE_R, PURPLE_G, PURPLE_B);
@@ -68,19 +54,19 @@ function drawCoverPage(doc: jsPDF, config: StoryConfig) {
   const titleText = config.childName && config.includeChild
     ? `${config.childName}'s Story`
     : 'A Magical Story';
-  doc.text(titleText, cx, 62, { align: 'center' });
+  doc.text(titleText, cx, 42, { align: 'center' });
 
-  // Divider line
+  // Divider
   doc.setDrawColor(PURPLE_R, PURPLE_G, PURPLE_B);
   doc.setLineWidth(0.4);
-  doc.line(MARGIN + 15, 68, PAGE_W - MARGIN - 15, 68);
+  doc.line(MARGIN + 15, 48, PAGE_W - MARGIN - 15, 48);
 
   // Theme
   doc.setFontSize(11);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(GRAY_R, GRAY_G, GRAY_B);
   const themeLines = doc.splitTextToSize(`"${config.theme}"`, CONTENT_W - 8);
-  doc.text(themeLines, cx, 80, { align: 'center' });
+  doc.text(themeLines, cx, 58, { align: 'center' });
 
   // Age label
   const ageLabel: Record<string, string> = {
@@ -88,18 +74,21 @@ function drawCoverPage(doc: jsPDF, config: StoryConfig) {
     '5-7': 'For readers aged 5-7',
     '8-10': 'For readers aged 8-10',
   };
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(167, 139, 250);
-  doc.text(ageLabel[config.ageRange] ?? '', cx, 100, { align: 'center' });
+  doc.text(ageLabel[config.ageRange] ?? '', cx, 72, { align: 'center' });
 
-  // Decorative circle in center of page
+  // Center image — first story illustration or fallback circle
+  const imageY = 82;
+  const imageH = 90;
+
   doc.setFillColor(216, 180, 254);
-  doc.circle(cx, 148, 18, 'F');
-  doc.setFillColor(PURPLE_R, PURPLE_G, PURPLE_B);
-  doc.circle(cx, 148, 12, 'F');
-  doc.setFillColor(255, 255, 255);
-  doc.circle(cx, 148, 5, 'F');
+  doc.roundedRect(MARGIN, imageY, CONTENT_W, imageH, 5, 5, 'F');
+
+  if (coverImageUrl) {
+    await drawImage(doc, coverImageUrl, MARGIN, imageY, CONTENT_W, imageH);
+  }
 
   // Footer
   doc.setFontSize(8);
@@ -150,12 +139,14 @@ export async function generateStoryPDF(
   pages: StoryPage[],
   config: StoryConfig
 ): Promise<void> {
-  // Only include pages that are fully ready: have text, have image, not still generating
+  // Only pages that are fully ready: have text, have image, not still generating
   const readyPages = pages.filter(p => p.text && p.imageUrl && !p.isGenerating);
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
 
-  drawCoverPage(doc, config);
+  // Use first page's illustration as cover image
+  const coverImageUrl = readyPages[0]?.imageUrl;
+  await drawCoverPage(doc, config, coverImageUrl);
 
   for (let i = 0; i < readyPages.length; i++) {
     doc.addPage();
