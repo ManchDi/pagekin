@@ -65,6 +65,7 @@ export const generateStoryPage = async (
     theme: config.theme,
     pageCount: config.pageCount,
     includeChild: config.includeChild,
+    ageRange: config.ageRange,
     pageIndex,
     previousPages,
   });

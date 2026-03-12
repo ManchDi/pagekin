@@ -1,15 +1,32 @@
 import { GoogleGenAI } from '@google/genai';
 
+const AGE_GUIDELINES = {
+  '2-4': {
+    label: 'toddler (age 2-4)',
+    rules: 'Use very simple words (max 2 syllables where possible). 1-2 short sentences per page. Lots of repetition and simple cause-effect. Think "The Very Hungry Caterpillar" level.',
+  },
+  '5-7': {
+    label: 'early reader (age 5-7)',
+    rules: 'Simple sentences, common words. 2-3 sentences per page. Light adventure, clear emotions, simple problem-solving. Think early Dr. Seuss or "Frog and Toad" level.',
+  },
+  '8-10': {
+    label: 'confident reader (age 8-10)',
+    rules: '3-4 sentences per page. Can use richer vocabulary and more complex ideas. Characters can have inner thoughts and motivations. Think short chapter book level.',
+  },
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { childName, theme, pageCount, includeChild, pageIndex, previousPages } = req.body;
+  const { childName, theme, pageCount, includeChild, ageRange, pageIndex, previousPages } = req.body;
 
   if (!theme || pageIndex === undefined) {
     return res.status(400).json({ error: 'theme and pageIndex are required' });
   }
+
+  const age = AGE_GUIDELINES[ageRange] || AGE_GUIDELINES['5-7'];
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -24,22 +41,23 @@ export default async function handler(req, res) {
 
     const isLastPage = pageIndex === pageCount - 1;
 
-    const prompt = `You are writing a children's storybook. ${childContext}
-The story theme is: "${theme}"
-The story is ${pageCount} pages long.
+    const prompt = `You are writing a children's storybook for a ${age.label}.
+${childContext}
+Story theme: "${theme}"
+Total pages: ${pageCount}
 ${previousContext}
 
 Write page ${pageIndex + 1} of ${pageCount}.
 ${isLastPage ? 'This is the final page — give the story a warm, satisfying ending.' : 'End this page on a moment that makes the reader want to turn the page.'}
 
-Rules:
-- 2-4 sentences only, simple language for young children
+Writing rules for this age group:
+- ${age.rules}
 - Warm, imaginative, and age-appropriate
-- ${includeChild && childName ? `Use the name "${childName}" naturally` : 'Keep the character consistent'}
+- ${includeChild && childName ? `Use the name "${childName}" naturally` : 'Keep the character consistent throughout'}
 
-Then on a new line write: IMAGE_PROMPT: [a detailed image generation prompt for this page in the style of a children's book illustration]
+Then on a new line write: IMAGE_PROMPT: [a vivid, detailed illustration prompt for this page in the style of a children's picture book, watercolor style]
 
-Respond with ONLY the page text and the IMAGE_PROMPT line. No labels, no page numbers.`;
+Respond with ONLY the page text and the IMAGE_PROMPT line. No labels, no page numbers, no extra commentary.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',

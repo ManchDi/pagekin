@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StoryConfig, StoryMode } from '../types';
+import { StoryConfig, StoryMode, AgeRange } from '../types';
 import { generateTheme } from '../services/geminiService';
 import { SparklesIcon, BookOpenIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
 
@@ -9,12 +9,19 @@ interface HomeScreenProps {
 
 const MAX_THEME_ATTEMPTS = 3;
 
+const AGE_OPTIONS: { value: AgeRange; label: string; description: string }[] = [
+  { value: '2-4', label: '2–4', description: 'Toddler' },
+  { value: '5-7', label: '5–7', description: 'Early reader' },
+  { value: '8-10', label: '8–10', description: 'Confident reader' },
+];
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
   const [childName, setChildName] = useState('');
   const [theme, setTheme] = useState('');
   const [pageCount, setPageCount] = useState<5 | 10 | 15 | 20>(5);
   const [includeChild, setIncludeChild] = useState(true);
   const [mode, setMode] = useState<StoryMode>('linear');
+  const [ageRange, setAgeRange] = useState<AgeRange>('5-7');
 
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
   const [themeAttempts, setThemeAttempts] = useState(0);
@@ -44,7 +51,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
 
   const handleSubmit = () => {
     if (!theme.trim()) return;
-    onGenerate({ childName: childName.trim(), theme: theme.trim(), pageCount, includeChild, mode });
+    onGenerate({
+      childName: childName.trim(),
+      theme: theme.trim(),
+      pageCount,
+      includeChild,
+      mode,
+      ageRange,
+    });
   };
 
   const isValid = theme.trim().length > 0;
@@ -53,6 +67,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-5xl md:text-6xl text-purple-600 font-fredoka flex items-center justify-center gap-3 mb-2">
@@ -94,6 +109,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
               </button>
             </div>
           )}
+
+          {/* Age range */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-600 mb-2">Child's age</label>
+            <div className="grid grid-cols-3 gap-2">
+              {AGE_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => setAgeRange(option.value)}
+                  className={`py-3 px-2 rounded-xl text-center transition-colors ${ageRange === option.value ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-purple-100'}`}
+                >
+                  <div className="text-sm font-bold">{option.label}</div>
+                  <div className={`text-xs font-normal mt-0.5 ${ageRange === option.value ? 'text-purple-100' : 'text-gray-400'}`}>
+                    {option.description}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Story theme */}
           <div>
@@ -182,6 +216,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
               </button>
               <button
                 className="py-3 px-4 rounded-xl text-sm font-semibold text-left relative bg-gray-100 text-gray-400 cursor-not-allowed"
+                disabled
               >
                 <SparklesIcon className="w-4 h-4 mb-1" />
                 <div>Interactive</div>

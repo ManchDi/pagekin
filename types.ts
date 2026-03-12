@@ -1,5 +1,6 @@
 export type StoryMode = 'linear' | 'interactive';
 export type AppScreen = 'home' | 'loading' | 'story';
+export type AgeRange = '2-4' | '5-7' | '8-10';
 
 export interface StoryConfig {
   childName: string;
@@ -7,6 +8,7 @@ export interface StoryConfig {
   pageCount: 5 | 10 | 15 | 20;
   includeChild: boolean;
   mode: StoryMode;
+  ageRange: AgeRange;
 }
 
 export interface StoryPage {

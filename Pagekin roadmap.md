@@ -150,3 +150,6 @@ Copy `.env.local.example` to `.env.local` and fill in your keys. Make sure `.env
 - Shareable story links
 - Mobile app (React Native)
 - Subscription model for unlimited stories
+- Add multi language support
+- Add add kid's age selection to adapt the story
+- Preload TTS together with text and image

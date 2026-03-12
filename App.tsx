@@ -1,16 +1,14 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { AppScreen, StoryConfig, StoryPage, ChatMessage } from './types';
+import { AppScreen, StoryConfig, StoryPage } from './types';
 import {
-  generateStoryPage, generateImage, generateSpeech,
-  getChatResponse, QuotaError
+  generateStoryPage, generateImage, generateSpeech, QuotaError
 } from './services/geminiService';
 import HomeScreen from './components/HomeScreen';
 import LoadingScreen from './components/LoadingScreen';
 import StoryViewer from './components/StoryViewer';
 import Controls from './components/Controls';
-import Chatbot from './components/Chatbot';
 import ApiKeyBanner from './components/ApiKeyBanner';
-import { SparklesIcon, ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/solid';
+import { SparklesIcon } from '@heroicons/react/24/solid';
 
 const App: React.FC = () => {
   // ── Screen management ──────────────────────────────────────────────────────
@@ -28,11 +26,6 @@ const App: React.FC = () => {
   // ── API key / quota ────────────────────────────────────────────────────────
   const [userApiKey, setUserApiKey] = useState<string | undefined>(undefined);
   const [showApiKeyBanner, setShowApiKeyBanner] = useState(false);
-
-  // ── Chat ───────────────────────────────────────────────────────────────────
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [isChatProcessing, setIsChatProcessing] = useState(false);
 
   // ── Audio refs ─────────────────────────────────────────────────────────────
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -130,7 +123,6 @@ const App: React.FC = () => {
           return updated;
         });
 
-        // Prefetch image in background — don't await
         generateImage(newPage.imagePrompt).then(imageUrl => {
           setStoryPages(prev => {
             const updated = [...prev];
@@ -153,7 +145,6 @@ const App: React.FC = () => {
     setScreen('loading');
     setStoryPages([]);
     setCurrentPageIndex(0);
-    setChatHistory([]);
 
     const firstPage = await generateNextPage(config, 0, []);
     if (!firstPage) {
@@ -306,23 +297,6 @@ const App: React.FC = () => {
     }
   }, [storyPages, currentPageIndex]);
 
-  // ── Chat ───────────────────────────────────────────────────────────────────
-  const handleSendMessage = useCallback(async (message: string) => {
-    setIsChatProcessing(true);
-    const updated: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
-    setChatHistory(updated);
-    try {
-      const response = await getChatResponse(updated, userApiKey);
-      setChatHistory(prev => [...prev, { role: 'model', content: response }]);
-    } catch (error) {
-      if (!handleQuotaError(error)) {
-        setChatHistory(prev => [...prev, { role: 'model', content: "Oops! I had a little trouble thinking. Please try again." }]);
-      }
-    } finally {
-      setIsChatProcessing(false);
-    }
-  }, [chatHistory, userApiKey, handleQuotaError]);
-
   // ── Render ─────────────────────────────────────────────────────────────────
   if (screen === 'home') {
     return <HomeScreen onGenerate={handleGenerate} />;
@@ -386,22 +360,6 @@ const App: React.FC = () => {
           isPageGenerating={!!currentPage?.isGenerating}
         />
       </footer>
-
-      <button
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        className="fixed bottom-6 right-6 bg-orange-400 hover:bg-orange-500 text-white p-4 rounded-full shadow-lg transform hover:scale-110 transition-transform duration-200 z-50"
-        aria-label="Open chatbot"
-      >
-        <ChatBubbleBottomCenterTextIcon className="w-8 h-8" />
-      </button>
-
-      <Chatbot
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        messages={chatHistory}
-        onSendMessage={handleSendMessage}
-        isProcessing={isChatProcessing}
-      />
     </div>
   );
 };
