@@ -1,0 +1,7 @@
+{
+  "name": "StoryTime AI",
+  "description": "An interactive storytelling app for kids that uses AI to generate unique illustrations and read stories aloud. Features a friendly chat bot for curious minds.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
