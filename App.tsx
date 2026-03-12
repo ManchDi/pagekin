@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { AppScreen, StoryConfig, StoryPage } from './types';
 import {
-  generateStoryPage, generateImage, generateSpeech, QuotaError
+  generateStoryPage, generateImage, generateSpeech, QuotaError, QuotaService
 } from './services/geminiService';
 import HomeScreen from './components/HomeScreen';
 import LoadingScreen from './components/LoadingScreen';
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   // ── API key / quota ────────────────────────────────────────────────────────
   const [userApiKey, setUserApiKey] = useState<string | undefined>(undefined);
   const [showApiKeyBanner, setShowApiKeyBanner] = useState(false);
+  const [quotaService, setQuotaService] = useState<QuotaService>('unknown');
 
   // ── Audio refs ─────────────────────────────────────────────────────────────
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -42,6 +43,7 @@ const App: React.FC = () => {
   // ── Helpers ────────────────────────────────────────────────────────────────
   const handleQuotaError = useCallback((error: unknown) => {
     if (error instanceof QuotaError) {
+      setQuotaService(error.service);
       setShowApiKeyBanner(true);
       return true;
     }
@@ -389,6 +391,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 text-gray-800 p-4 sm:p-6 md:p-8 flex flex-col items-center">
       {showApiKeyBanner && (
         <ApiKeyBanner
+          service={quotaService}
           onKeySubmit={(key) => { setUserApiKey(key); setShowApiKeyBanner(false); }}
           onDismiss={() => setShowApiKeyBanner(false)}
         />

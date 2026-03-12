@@ -24,10 +24,14 @@ function buildAudioBuffer(data: Uint8Array, ctx: AudioContext): AudioBuffer {
 
 // ─── Quota error ──────────────────────────────────────────────────────────────
 
+export type QuotaService = 'story' | 'speech' | 'image' | 'theme' | 'unknown';
+
 export class QuotaError extends Error {
-  constructor() {
+  service: QuotaService;
+  constructor(service: QuotaService = 'unknown') {
     super("QUOTA_EXCEEDED");
     this.name = "QuotaError";
+    this.service = service;
   }
 }
 
@@ -37,7 +41,18 @@ async function callProxy(endpoint: string, body: object): Promise<Response> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (res.status === 429) throw new QuotaError();
+
+  if (res.status === 429) {
+    // Read service field from response body if available
+    try {
+      const data = await res.clone().json();
+      throw new QuotaError(data.service ?? 'unknown');
+    } catch (e) {
+      if (e instanceof QuotaError) throw e;
+      throw new QuotaError('unknown');
+    }
+  }
+
   if (!res.ok) throw new Error(`Proxy error: ${res.statusText}`);
   return res;
 }
@@ -111,32 +126,4 @@ export const generateSpeech = async (
 
   if (!base64Audio) throw new Error("No audio data received");
   return buildAudioBuffer(decode(base64Audio), ctx);
-};
-
-// ─── Chat ─────────────────────────────────────────────────────────────────────
-
-export const getChatResponse = async (
-  history: ChatMessage[],
-  userApiKey?: string
-): Promise<string> => {
-  if (userApiKey) {
-    const ai = new GoogleGenAI({ apiKey: userApiKey });
-    const contents = history.map((msg) => ({
-      role: msg.role,
-      parts: [{ text: msg.content }],
-    }));
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents,
-      config: {
-        systemInstruction:
-          "You are a friendly and curious robot friend for a young child. Keep your answers simple, encouraging, and short. Use fun emojis. Your name is Sparky.",
-      },
-    });
-    return response.text;
-  }
-
-  const res = await callProxy("chat", { history });
-  const data = await res.json();
-  return data.text;
 };
