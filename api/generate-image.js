@@ -27,6 +27,8 @@ export default async function handler(req, res) {
 
     res.status(200).json({ imageBytes: imagePart.inlineData.data });
   } catch (error) {
+    console.error('Image generation error:', JSON.stringify(error, null, 2));
+    console.error('Error message:', error.message);
     const status = error?.status === 429 ? 429 : 500;
     res.status(status).json({ error: error.message || 'Image generation failed' });
   }
