@@ -67,8 +67,8 @@ export const generateImage = async (
 
   // Proxy path
   const res = await callProxy("generate-image", { prompt });
-  const { imageBytes } = await res.json();
-  return `data:image/jpeg;base64,${imageBytes}`;
+  const { imageUrl } = await res.json();
+  return imageUrl;
 };
 
 export const generateSpeech = async (

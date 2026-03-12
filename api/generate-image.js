@@ -1,5 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -11,25 +9,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: `Generate a children's storybook illustration: ${prompt}`,
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
-    });
+    const encoded = encodeURIComponent(
+      `children's storybook illustration, whimsical, colorful, cartoon style: ${prompt}`
+    );
+    const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=512&height=512&nologo=true`;
 
-    const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (!imagePart?.inlineData) {
-      throw new Error('No image returned from API');
-    }
-
-    res.status(200).json({ imageBytes: imagePart.inlineData.data });
+    res.status(200).json({ imageUrl });
   } catch (error) {
-    console.error('Image generation error:', JSON.stringify(error, null, 2));
-    console.error('Error message:', error.message);
-    const status = error?.status === 429 ? 429 : 500;
-    res.status(status).json({ error: error.message || 'Image generation failed' });
+    console.error('Image generation error:', error.message);
+    res.status(500).json({ error: error.message || 'Image generation failed' });
   }
-};
+}
