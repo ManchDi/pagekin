@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   ChevronLeftIcon, ChevronRightIcon, PlayIcon, StopIcon,
-  MicrophoneIcon, ArrowPathIcon, TrashIcon, HomeIcon,
+  MicrophoneIcon, ArrowPathIcon, TrashIcon, HomeIcon, ArrowDownTrayIcon,
 } from '@heroicons/react/24/solid';
 
 interface ControlsProps {
@@ -11,6 +11,7 @@ interface ControlsProps {
   onToggleRecording: () => void;
   onDeleteRecording: () => void;
   onGoHome: () => void;
+  onSavePDF: () => void;
   isReading: boolean;
   isLoadingTTS: boolean;
   isRecording: boolean;
@@ -19,6 +20,7 @@ interface ControlsProps {
   hasNext: boolean;
   isImageLoading: boolean;
   isPageGenerating: boolean;
+  isSavingPDF: boolean;
 }
 
 const ControlButton: React.FC<{
@@ -39,9 +41,10 @@ const ControlButton: React.FC<{
 );
 
 const Controls: React.FC<ControlsProps> = ({
-  onPrev, onNext, onReadAloud, onToggleRecording, onDeleteRecording, onGoHome,
+  onPrev, onNext, onReadAloud, onToggleRecording, onDeleteRecording,
+  onGoHome, onSavePDF,
   isReading, isLoadingTTS, isRecording, hasRecording, hasPrev, hasNext,
-  isImageLoading, isPageGenerating,
+  isImageLoading, isPageGenerating, isSavingPDF,
 }) => {
   const isBusy = isImageLoading || isPageGenerating;
 
@@ -61,68 +64,85 @@ const Controls: React.FC<ControlsProps> = ({
   const recordBtn = getRecordButton();
 
   return (
-    <div className="flex justify-center items-center gap-2 sm:gap-3 flex-wrap">
-      {/* Home */}
-      <ControlButton
-        onClick={onGoHome}
-        disabled={isRecording}
-        className="bg-gray-400 hover:bg-gray-500 focus:ring-gray-300"
-        title="New story"
-      >
-        <HomeIcon className="h-5 w-5" />
-      </ControlButton>
-
-      {/* Prev */}
-      <ControlButton
-        onClick={onPrev}
-        disabled={!hasPrev || isBusy || isReading || isRecording}
-        className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300"
-      >
-        <ChevronLeftIcon className="h-5 w-5" />
-        Prev
-      </ControlButton>
-
-      {/* Read aloud */}
-      <ControlButton
-        onClick={onReadAloud}
-        disabled={isBusy || isRecording || isLoadingTTS && !isReading}
-        className={`w-32 justify-center ${readBtn.color}`}
-      >
-        {readBtn.icon}
-        {readBtn.text}
-      </ControlButton>
-
-      {/* Record */}
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col items-center gap-3">
+      {/* Main controls row */}
+      <div className="flex justify-center items-center gap-2 sm:gap-3 flex-wrap">
+        {/* Home */}
         <ControlButton
-          onClick={onToggleRecording}
-          disabled={isBusy || isReading || isLoadingTTS}
-          className={`w-36 justify-center ${recordBtn.color}`}
+          onClick={onGoHome}
+          disabled={isRecording}
+          className="bg-gray-400 hover:bg-gray-500 focus:ring-gray-300"
+          title="New story"
         >
-          {recordBtn.icon}
-          {recordBtn.text}
+          <HomeIcon className="h-5 w-5" />
         </ControlButton>
-        {hasRecording && !isRecording && (
-          <button
-            onClick={onDeleteRecording}
-            disabled={isBusy || isReading}
-            className="p-3 rounded-full bg-gray-400 hover:bg-gray-500 text-white shadow-md transition-transform duration-200 focus:outline-none focus:ring-4 focus:ring-gray-300 disabled:opacity-50"
-            aria-label="Delete recording"
+
+        {/* Prev */}
+        <ControlButton
+          onClick={onPrev}
+          disabled={!hasPrev || isBusy || isReading || isRecording}
+          className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300"
+        >
+          <ChevronLeftIcon className="h-5 w-5" />
+          Prev
+        </ControlButton>
+
+        {/* Read aloud */}
+        <ControlButton
+          onClick={onReadAloud}
+          disabled={isBusy || isRecording || (isLoadingTTS && !isReading)}
+          className={`w-32 justify-center ${readBtn.color}`}
+        >
+          {readBtn.icon}
+          {readBtn.text}
+        </ControlButton>
+
+        {/* Record */}
+        <div className="flex items-center gap-2">
+          <ControlButton
+            onClick={onToggleRecording}
+            disabled={isBusy || isReading || isLoadingTTS}
+            className={`w-36 justify-center ${recordBtn.color}`}
           >
-            <TrashIcon className="h-5 w-5" />
-          </button>
-        )}
+            {recordBtn.icon}
+            {recordBtn.text}
+          </ControlButton>
+          {hasRecording && !isRecording && (
+            <button
+              onClick={onDeleteRecording}
+              disabled={isBusy || isReading}
+              className="p-3 rounded-full bg-gray-400 hover:bg-gray-500 text-white shadow-md transition-transform duration-200 focus:outline-none focus:ring-4 focus:ring-gray-300 disabled:opacity-50"
+              aria-label="Delete recording"
+            >
+              <TrashIcon className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Next */}
+        <ControlButton
+          onClick={onNext}
+          disabled={!hasNext || isBusy || isReading || isRecording}
+          className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300"
+        >
+          Next
+          <ChevronRightIcon className="h-5 w-5" />
+        </ControlButton>
       </div>
 
-      {/* Next */}
-      <ControlButton
-        onClick={onNext}
-        disabled={!hasNext || isBusy || isReading || isRecording}
-        className="bg-pink-500 hover:bg-pink-600 focus:ring-pink-300"
+      {/* Save PDF — secondary row, visually distinct */}
+      <button
+        onClick={onSavePDF}
+        disabled={isSavingPDF || isRecording || isBusy}
+        className="flex items-center gap-2 px-5 py-2 bg-white border-2 border-purple-300 text-purple-600 font-semibold rounded-full shadow-sm hover:bg-purple-50 hover:border-purple-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm"
       >
-        Next
-        <ChevronRightIcon className="h-5 w-5" />
-      </ControlButton>
+        {isSavingPDF ? (
+          <span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin inline-block" />
+        ) : (
+          <ArrowDownTrayIcon className="h-4 w-4" />
+        )}
+        {isSavingPDF ? 'Preparing PDF...' : 'Save as PDF'}
+      </button>
     </div>
   );
 };

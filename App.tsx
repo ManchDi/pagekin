@@ -9,6 +9,7 @@ import StoryViewer from './components/StoryViewer';
 import Controls from './components/Controls';
 import ApiKeyBanner from './components/ApiKeyBanner';
 import { SparklesIcon } from '@heroicons/react/24/solid';
+import { generateStoryPDF } from './services/pdfService';
 
 const App: React.FC = () => {
   // ── Screen management ──────────────────────────────────────────────────────
@@ -22,6 +23,7 @@ const App: React.FC = () => {
   const [isLoadingTTS, setIsLoadingTTS] = useState(false);
   const [isReading, setIsReading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isSavingPDF, setIsSavingPDF] = useState(false);
 
   // ── API key / quota ────────────────────────────────────────────────────────
   const [userApiKey, setUserApiKey] = useState<string | undefined>(undefined);
@@ -297,6 +299,20 @@ const App: React.FC = () => {
     }
   }, [storyPages, currentPageIndex]);
 
+  // ── Save as PDF ────────────────────────────────────────────────────────────
+  const handleSavePDF = useCallback(async () => {
+    if (!storyConfig) return;
+    setIsSavingPDF(true);
+    try {
+      await generateStoryPDF(storyPages, storyConfig);
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      alert('Sorry, PDF generation failed. Please try again.');
+    } finally {
+      setIsSavingPDF(false);
+    }
+  }, [storyPages, storyConfig]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   if (screen === 'home') {
     return <HomeScreen onGenerate={handleGenerate} />;
@@ -350,6 +366,7 @@ const App: React.FC = () => {
           onToggleRecording={handleToggleRecording}
           onDeleteRecording={handleDeleteRecording}
           onGoHome={handleGoHome}
+          onSavePDF={handleSavePDF}
           isReading={isReading}
           isLoadingTTS={isLoadingTTS}
           isRecording={isRecording}
@@ -358,6 +375,7 @@ const App: React.FC = () => {
           hasNext={hasNext}
           isImageLoading={isLoadingImage}
           isPageGenerating={!!currentPage?.isGenerating}
+          isSavingPDF={isSavingPDF}
         />
       </footer>
     </div>
