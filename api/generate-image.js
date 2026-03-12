@@ -18,6 +18,7 @@ export default async function handler(req, res) {
         headers: {
           'Authorization': `Bearer ${process.env.HF_API_KEY}`,
           'Content-Type': 'application/json',
+          'x-wait-for-model': 'true',
         },
         body: JSON.stringify({ inputs: fullPrompt }),
       }
@@ -25,20 +26,13 @@ export default async function handler(req, res) {
 
     console.log('HF response status:', response.status);
 
-    // Model is still loading — tell client to retry in a few seconds
-    if (response.status === 503) {
-      const json = await response.json();
-      console.log('Model loading:', json);
-      return res.status(503).json({ error: 'Model is loading, please retry in 20 seconds', loading: true });
-    }
-
     if (response.status === 429) {
       return res.status(429).json({ error: 'Quota exceeded' });
     }
 
     if (!response.ok) {
       const text = await response.text();
-      console.error('HF error body:', text);
+      console.error('HF error:', text);
       return res.status(500).json({ error: `HuggingFace error: ${text}` });
     }
 
@@ -47,7 +41,7 @@ export default async function handler(req, res) {
     res.status(200).json({ imageBytes: base64, mimeType: 'image/png' });
 
   } catch (error) {
-    console.error('Caught error:', error.message, error.stack);
+    console.error('Caught error:', error.message);
     res.status(500).json({ error: error.message || 'Image generation failed' });
   }
 }
