@@ -12,18 +12,20 @@ export default async function handler(req, res) {
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
-      prompt,
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-preview-image-generation',
+      contents: `Generate a children's storybook illustration: ${prompt}`,
       config: {
-        numberOfImages: 1,
-        outputMimeType: 'image/jpeg',
-        aspectRatio: '1:1',
+        responseModalities: ['TEXT', 'IMAGE'],
       },
     });
 
-    const imageBytes = response.generatedImages[0].image.imageBytes;
-    res.status(200).json({ imageBytes });
+    const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!imagePart?.inlineData) {
+      throw new Error('No image returned from API');
+    }
+
+    res.status(200).json({ imageBytes: imagePart.inlineData.data });
   } catch (error) {
     const status = error?.status === 429 ? 429 : 500;
     res.status(status).json({ error: error.message || 'Image generation failed' });
