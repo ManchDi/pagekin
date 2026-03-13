@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { StoryConfig, StoryMode, AgeRange } from '../types';
+import { StoryConfig, StoryMode, AgeRange, SavedSession } from '../types';
 import { generateTheme } from '../services/geminiService';
-import { SparklesIcon, BookOpenIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
+import { SparklesIcon, BookOpenIcon, ArrowPathIcon, PhotoIcon, ArrowRightIcon } from '@heroicons/react/24/solid';
 
 interface HomeScreenProps {
   onGenerate: (config: StoryConfig) => void;
+  savedSession: SavedSession | null;
+  onContinueSession: () => void;
+  onClearSession: () => void;
 }
 
 const MAX_THEME_ATTEMPTS = 3;
@@ -15,13 +18,29 @@ const AGE_OPTIONS: { value: AgeRange; label: string; description: string }[] = [
   { value: '8-10', label: '8–10', description: 'Confident reader' },
 ];
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
+const Toggle: React.FC<{ value: boolean; onChange: (v: boolean) => void; label: string; sub?: string }> = ({ value, onChange, label, sub }) => (
+  <div className="flex items-center justify-between bg-purple-50 rounded-xl px-4 py-3">
+    <div>
+      <span className="text-sm font-medium text-purple-700">{label}</span>
+      {sub && <p className="text-xs text-purple-400 mt-0.5">{sub}</p>}
+    </div>
+    <button
+      onClick={() => onChange(!value)}
+      className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${value ? 'bg-purple-500' : 'bg-gray-300'}`}
+    >
+      <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${value ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  </div>
+);
+
+const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate, savedSession, onContinueSession, onClearSession }) => {
   const [childName, setChildName] = useState('');
   const [theme, setTheme] = useState('');
   const [pageCount, setPageCount] = useState<5 | 10 | 15 | 20>(5);
   const [includeChild, setIncludeChild] = useState(true);
   const [mode, setMode] = useState<StoryMode>('linear');
   const [ageRange, setAgeRange] = useState<AgeRange>('5-7');
+  const [generateImages, setGenerateImages] = useState(true);
 
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
   const [themeAttempts, setThemeAttempts] = useState(0);
@@ -51,18 +70,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
 
   const handleSubmit = () => {
     if (!theme.trim()) return;
-    onGenerate({
-      childName: childName.trim(),
-      theme: theme.trim(),
-      pageCount,
-      includeChild,
-      mode,
-      ageRange,
-    });
+    onGenerate({ childName: childName.trim(), theme: theme.trim(), pageCount, includeChild, mode, ageRange, generateImages });
   };
 
   const isValid = theme.trim().length > 0;
   const canGenerateMore = themeAttempts < MAX_THEME_ATTEMPTS;
+
+  const readyPageCount = savedSession
+    ? savedSession.pages.filter(p => p.text && !p.isGenerating).length
+    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center p-4">
@@ -77,6 +93,40 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
           </h1>
           <p className="text-lg text-purple-500">Every child deserves their own story</p>
         </div>
+
+        {/* Continue session card */}
+        {savedSession && (
+          <div className="mb-4 bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-purple-200 shadow-md p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-purple-400 uppercase tracking-wide mb-1">Continue where you left off</p>
+                <p className="font-semibold text-gray-700 truncate">
+                  {savedSession.config.childName
+                    ? `${savedSession.config.childName}'s Story`
+                    : 'Your Story'}
+                </p>
+                <p className="text-sm text-gray-500 truncate mt-0.5">"{savedSession.config.theme}"</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {readyPageCount} of {savedSession.config.pageCount} pages · page {savedSession.currentPageIndex + 1}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 shrink-0">
+                <button
+                  onClick={onContinueSession}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-purple-500 text-white text-sm font-semibold rounded-xl hover:bg-purple-600 transition-colors"
+                >
+                  Continue <ArrowRightIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={onClearSession}
+                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors text-center"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <div className="bg-white/70 backdrop-blur-sm rounded-3xl shadow-lg border border-purple-200 p-6 space-y-5">
@@ -97,17 +147,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
 
           {/* Include child toggle */}
           {childName.trim() && (
-            <div className="flex items-center justify-between bg-purple-50 rounded-xl px-4 py-3">
-              <span className="text-sm font-medium text-purple-700">
-                Make {childName} the main character
-              </span>
-              <button
-                onClick={() => setIncludeChild(!includeChild)}
-                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${includeChild ? 'bg-purple-500' : 'bg-gray-300'}`}
-              >
-                <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${includeChild ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
+            <Toggle
+              value={includeChild}
+              onChange={setIncludeChild}
+              label={`Make ${childName} the main character`}
+            />
           )}
 
           {/* Age range */}
@@ -153,7 +197,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
               )}
             </div>
 
-            {/* Suggested theme card */}
             {suggestedTheme && (
               <div className="mb-2 p-3 bg-purple-50 border border-purple-200 rounded-xl">
                 <p className="text-sm text-purple-700 mb-2">{suggestedTheme}</p>
@@ -227,6 +270,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate }) => {
               </button>
             </div>
           </div>
+
+          {/* Illustrations toggle */}
+          <Toggle
+            value={generateImages}
+            onChange={setGenerateImages}
+            label="Generate illustrations"
+            sub={generateImages ? 'AI watercolor art for each page' : 'Text only, saves quota'}
+          />
 
           {/* Generate button */}
           <button

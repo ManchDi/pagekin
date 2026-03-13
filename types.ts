@@ -9,6 +9,7 @@ export interface StoryConfig {
   includeChild: boolean;
   mode: StoryMode;
   ageRange: AgeRange;
+  generateImages: boolean;
 }
 
 export interface StoryPage {
@@ -18,6 +19,13 @@ export interface StoryPage {
   imageUrl?: string;
   userRecordingUrl?: string;
   isGenerating?: boolean;
+}
+
+export interface SavedSession {
+  config: StoryConfig;
+  pages: StoryPage[];
+  currentPageIndex: number;
+  savedAt: number;
 }
 
 export interface ChatMessage {
