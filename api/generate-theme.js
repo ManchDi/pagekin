@@ -27,7 +27,7 @@ Respond with ONLY the theme text. No labels, no quotation marks, no explanation.
   try {
     const result = await withGeminiRotation(async (ai) => {
       return await ai.models.generateContent({
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-3.1-flash-lite-preview',
         contents: [{ parts: [{ text: prompt }] }],
       });
     });
