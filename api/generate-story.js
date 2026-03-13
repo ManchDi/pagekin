@@ -51,7 +51,7 @@ Respond with ONLY the page text and the IMAGE_PROMPT line. No labels, no page nu
   try {
     const result = await withGeminiRotation(async (ai) => {
       return await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash-lite',
         contents: [{ parts: [{ text: prompt }] }],
       });
     });
