@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { StoryConfig, StoryMode, AgeRange, SavedSession } from '../types';
 import { generateTheme } from '../services/geminiService';
-import { SparklesIcon, BookOpenIcon, ArrowPathIcon, PhotoIcon, ArrowRightIcon } from '@heroicons/react/24/solid';
+import { SparklesIcon, BookOpenIcon, ArrowPathIcon, ArrowRightIcon, ArrowDownTrayIcon, TrashIcon } from '@heroicons/react/24/solid';
 
 interface HomeScreenProps {
   onGenerate: (config: StoryConfig) => void;
-  savedSession: SavedSession | null;
-  onContinueSession: () => void;
+  savedSessions: SavedSession[];
+  onContinueSession: (session: SavedSession) => void;
+  onDeleteSession: (savedAt: number) => void;
+  onDownloadSessionPDF: (session: SavedSession, visitedOnly: boolean) => void;
   onClearSession: () => void;
 }
 
@@ -33,7 +35,109 @@ const Toggle: React.FC<{ value: boolean; onChange: (v: boolean) => void; label: 
   </div>
 );
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate, savedSession, onContinueSession, onClearSession }) => {
+// Mini PDF download picker shown inline per saved story card
+const SessionPDFMenu: React.FC<{
+  session: SavedSession;
+  onVisitedOnly: () => void;
+  onGenerateAll: () => void;
+  onClose: () => void;
+}> = ({ session, onVisitedOnly, onGenerateAll, onClose }) => {
+  const visitedCount = session.pages.filter(p => p.text && !p.isGenerating).length;
+  const total = session.config.pageCount;
+  const allReady = visitedCount === total;
+  return (
+    <div className="mt-2 bg-white border border-purple-200 rounded-xl shadow-lg overflow-hidden text-sm z-10">
+      <div className="px-4 py-2 bg-purple-50 text-purple-600 font-semibold text-xs uppercase tracking-wide">
+        Download PDF
+      </div>
+      <button
+        onClick={() => { onVisitedOnly(); onClose(); }}
+        className="w-full text-left px-4 py-2.5 hover:bg-purple-50 text-gray-700 transition-colors flex items-center gap-2"
+      >
+        <ArrowDownTrayIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />
+        <div>
+          <div className="font-medium">Download visited pages</div>
+          <div className="text-xs text-gray-400">{visitedCount} page{visitedCount !== 1 ? 's' : ''} ready</div>
+        </div>
+      </button>
+      {!allReady && (
+        <button
+          onClick={() => { onGenerateAll(); onClose(); }}
+          className="w-full text-left px-4 py-2.5 hover:bg-purple-50 text-gray-700 border-t border-gray-100 transition-colors flex items-center gap-2"
+        >
+          <SparklesIcon className="w-4 h-4 text-pink-400 flex-shrink-0" />
+          <div>
+            <div className="font-medium">Generate all & download</div>
+            <div className="text-xs text-gray-400">Complete all {total} pages first</div>
+          </div>
+        </button>
+      )}
+    </div>
+  );
+};
+
+const SavedSessionCard: React.FC<{
+  session: SavedSession;
+  onContinue: () => void;
+  onDelete: () => void;
+  onDownloadVisited: () => void;
+  onDownloadAll: () => void;
+}> = ({ session, onContinue, onDelete, onDownloadVisited, onDownloadAll }) => {
+  const [showPDFMenu, setShowPDFMenu] = useState(false);
+  const visitedCount = session.pages.filter(p => p.text && !p.isGenerating).length;
+  const title = session.config.childName
+    ? `${session.config.childName}'s Story`
+    : 'Your Story';
+  const savedDate = new Date(session.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-purple-200 shadow-sm p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-700 truncate">{title}</p>
+          <p className="text-sm text-gray-500 truncate mt-0.5">"{session.config.theme}"</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {visitedCount} of {session.config.pageCount} pages · saved {savedDate}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <button
+            onClick={onContinue}
+            className="flex items-center gap-1.5 px-3 py-2 bg-purple-500 text-white text-xs font-semibold rounded-xl hover:bg-purple-600 transition-colors"
+          >
+            Continue <ArrowRightIcon className="w-3 h-3" />
+          </button>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setShowPDFMenu(v => !v)}
+              title="Download PDF"
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-purple-500 border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+            >
+              <ArrowDownTrayIcon className="w-3 h-3" /> PDF
+            </button>
+            <button
+              onClick={onDelete}
+              title="Delete"
+              className="flex items-center justify-center px-2 py-1.5 text-xs text-gray-400 border border-gray-200 rounded-lg hover:bg-red-50 hover:text-red-400 hover:border-red-200 transition-colors"
+            >
+              <TrashIcon className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+      {showPDFMenu && (
+        <SessionPDFMenu
+          session={session}
+          onVisitedOnly={onDownloadVisited}
+          onGenerateAll={onDownloadAll}
+          onClose={() => setShowPDFMenu(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate, savedSessions, onContinueSession, onDeleteSession, onDownloadSessionPDF, onClearSession }) => {
   const [childName, setChildName] = useState('');
   const [theme, setTheme] = useState('');
   const [pageCount, setPageCount] = useState<5 | 10 | 15 | 20>(5);
@@ -76,9 +180,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate, savedSession, onCon
   const isValid = theme.trim().length > 0;
   const canGenerateMore = themeAttempts < MAX_THEME_ATTEMPTS;
 
-  const readyPageCount = savedSession
-    ? savedSession.pages.filter(p => p.text && !p.isGenerating).length
-    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center p-4">
@@ -94,37 +195,27 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onGenerate, savedSession, onCon
           <p className="text-lg text-purple-500">Every child deserves their own story</p>
         </div>
 
-        {/* Continue session card */}
-        {savedSession && (
-          <div className="mb-4 bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-purple-200 shadow-md p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-purple-400 uppercase tracking-wide mb-1">Continue where you left off</p>
-                <p className="font-semibold text-gray-700 truncate">
-                  {savedSession.config.childName
-                    ? `${savedSession.config.childName}'s Story`
-                    : 'Your Story'}
-                </p>
-                <p className="text-sm text-gray-500 truncate mt-0.5">"{savedSession.config.theme}"</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {readyPageCount} of {savedSession.config.pageCount} pages · page {savedSession.currentPageIndex + 1}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2 shrink-0">
-                <button
-                  onClick={onContinueSession}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-purple-500 text-white text-sm font-semibold rounded-xl hover:bg-purple-600 transition-colors"
-                >
-                  Continue <ArrowRightIcon className="w-4 h-4" />
+        {/* Saved sessions */}
+        {savedSessions.length > 0 && (
+          <div className="mb-4 space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-semibold text-purple-400 uppercase tracking-wide">Continue a story</p>
+              {savedSessions.length > 1 && (
+                <button onClick={onClearSession} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                  Clear all
                 </button>
-                <button
-                  onClick={onClearSession}
-                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors text-center"
-                >
-                  Dismiss
-                </button>
-              </div>
+              )}
             </div>
+            {savedSessions.map(session => (
+              <SavedSessionCard
+                key={session.savedAt}
+                session={session}
+                onContinue={() => onContinueSession(session)}
+                onDelete={() => onDeleteSession(session.savedAt)}
+                onDownloadVisited={() => onDownloadSessionPDF(session, true)}
+                onDownloadAll={() => onDownloadSessionPDF(session, false)}
+              />
+            ))}
           </div>
         )}
 

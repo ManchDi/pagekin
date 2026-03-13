@@ -12,27 +12,47 @@ import StoryModeBanner from './components/StoryModeBanner';
 import { SparklesIcon } from '@heroicons/react/24/solid';
 import { generateStoryPDF } from './services/pdfService';
 import DownloadModal from './components/DownloadModal';
+import RecordAllModal from './components/RecordAllModal';
 
-const SESSION_KEY = 'pagekin_session';
+const SESSIONS_KEY = 'pagekin_sessions';
+const MAX_SAVED_SESSIONS = 5;
+
+function loadAllSessions(): SavedSession[] {
+  try {
+    const raw = localStorage.getItem(SESSIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
 
 function saveSession(config: StoryConfig, pages: StoryPage[], currentPageIndex: number) {
   try {
-    // Strip blob URLs before saving — they don't survive page reload
     const safePages = pages.map(p => ({ ...p, userRecordingUrl: undefined }));
-    const session: SavedSession = { config, pages: safePages, currentPageIndex, savedAt: Date.now() };
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    const newSession: SavedSession = { config, pages: safePages, currentPageIndex, savedAt: Date.now() };
+
+    // Remove any existing session with the same theme+childName (de-duplicate), then prepend
+    const existing = loadAllSessions().filter(
+      s => !(s.config.theme === config.theme && s.config.childName === config.childName)
+    );
+    const updated = [newSession, ...existing].slice(0, MAX_SAVED_SESSIONS);
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(updated));
   } catch { /* ignore */ }
 }
 
 function loadSession(): SavedSession | null {
+  // Returns the most recent session (for backward compat)
+  const sessions = loadAllSessions();
+  return sessions[0] ?? null;
+}
+
+function removeSession(savedAt: number) {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    const updated = loadAllSessions().filter(s => s.savedAt !== savedAt);
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(updated));
+  } catch { /* ignore */ }
 }
 
 function clearSession() {
-  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSIONS_KEY);
 }
 
 const App: React.FC = () => {
@@ -40,6 +60,7 @@ const App: React.FC = () => {
   const [screen, setScreen] = useState<AppScreen>('home');
   const [storyConfig, setStoryConfig] = useState<StoryConfig | null>(null);
   const [savedSession, setSavedSession] = useState<SavedSession | null>(loadSession);
+  const [allSavedSessions, setAllSavedSessions] = useState<SavedSession[]>(loadAllSessions);
 
   // ── Story state ────────────────────────────────────────────────────────────
   const [storyPages, setStoryPages] = useState<StoryPage[]>([]);
@@ -50,6 +71,7 @@ const App: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [isRecordingAll, setIsRecordingAll] = useState(false);
+  const [showRecordAllModal, setShowRecordAllModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState(0);
@@ -184,6 +206,7 @@ const App: React.FC = () => {
   const handleGenerate = useCallback(async (config: StoryConfig) => {
     clearSession();
     setSavedSession(null);
+    setAllSavedSessions([]);
     setStoryConfig(config);
     setScreen('loading');
     setStoryPages([]);
@@ -203,21 +226,46 @@ const App: React.FC = () => {
   }, [generateNextPage, loadImageForPage, prefetchPages]);
 
   // ── Continue saved session ─────────────────────────────────────────────────
-  const handleContinueSession = useCallback(() => {
-    if (!savedSession) return;
-    setStoryConfig(savedSession.config);
-    setStoryPages(savedSession.pages);
-    setCurrentPageIndex(savedSession.currentPageIndex);
+  const handleContinueSession = useCallback((session?: SavedSession) => {
+    const target = session ?? savedSession;
+    if (!target) return;
+    setStoryConfig(target.config);
+    setStoryPages(target.pages);
+    setCurrentPageIndex(target.currentPageIndex);
     setScreen('story');
-    // Load image for current page if missing and images enabled
-    if (savedSession.config.generateImages) {
-      const pages = savedSession.pages;
-      const idx = savedSession.currentPageIndex;
-      if (pages[idx] && !pages[idx].imageUrl) {
-        loadImageForPage(idx, pages);
-      }
+    if (target.config.generateImages) {
+      const pages = target.pages;
+      const idx = target.currentPageIndex;
+      if (pages[idx] && !pages[idx].imageUrl) loadImageForPage(idx, pages);
     }
   }, [savedSession, loadImageForPage]);
+
+  const handleDeleteSession = useCallback((savedAt: number) => {
+    removeSession(savedAt);
+    const refreshed = loadAllSessions();
+    setSavedSession(refreshed[0] ?? null);
+    setAllSavedSessions(refreshed);
+  }, []);
+
+  const handleDownloadSessionPDF = useCallback(async (session: SavedSession, visitedOnly: boolean) => {
+    if (visitedOnly) {
+      const pagesToDownload = session.pages.filter(p => p.text && !p.isGenerating);
+      try {
+        await generateStoryPDF(pagesToDownload, session.config);
+      } catch (error) {
+        console.error('PDF generation failed:', error);
+        alert('Sorry, PDF generation failed. Please try again.');
+      }
+    } else {
+      // Load the session into story state, then open the download modal (generate-all flow)
+      setStoryConfig(session.config);
+      setStoryPages(session.pages);
+      setCurrentPageIndex(session.currentPageIndex);
+      setScreen('story');
+      // Small delay to let state settle, then open the download modal
+      setTimeout(() => setShowDownloadModal(true), 100);
+    }
+  }, []);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   const handleNextPage = useCallback(async () => {
@@ -269,7 +317,9 @@ const handleGoHome = useCallback(() => {
   handleStopRecording();
   if (storyConfig && storyPages.length > 0) {
     saveSession(storyConfig, storyPages, currentPageIndex);
-    setSavedSession(loadSession()); 
+    const refreshed = loadAllSessions();
+    setSavedSession(refreshed[0] ?? null);
+    setAllSavedSessions(refreshed);
   }
   setScreen('home');
 }, [stopReading, handleStopRecording, storyConfig, storyPages, currentPageIndex]);
@@ -365,8 +415,8 @@ const handleGoHome = useCallback(() => {
       await playSinglePage(pageIdx);
       if (playAllStopRef.current) break;
 
-      // 800ms pause between pages then advance
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // 200ms pause between pages then advance
+      await new Promise(resolve => setTimeout(resolve, 200));
       if (playAllStopRef.current) break;
 
       pageIdx++;
@@ -422,68 +472,35 @@ const handleGoHome = useCallback(() => {
     }
   }, [isRecording, handleStopRecording, handleStartRecording]);
 
-  // ── Record full story ──────────────────────────────────────────────────────
-  const handleRecordAll = useCallback(async () => {
+  // ── Record full story — opens the RecordAllModal ───────────────────────────
+  const handleRecordAll = useCallback(() => {
     if (!storyConfig) return;
-    recordAllStopRef.current = false;
+    stopReading();
+    setShowRecordAllModal(true);
     setIsRecordingAll(true);
+  }, [storyConfig, stopReading]);
 
-    let pageIdx = currentPageIndexRef.current;
-
-    while (pageIdx < storyConfig.pageCount && !recordAllStopRef.current) {
-      const pages = storyPagesRef.current;
-
-      // Generate text for this page if missing
-      if (!pages[pageIdx]?.text || pages[pageIdx].isGenerating) {
-        setStoryPages(prev => {
-          const updated = [...prev];
-          if (!updated[pageIdx]) {
-            updated[pageIdx] = { id: pageIdx + 1, text: '', imagePrompt: '', isGenerating: true };
-          }
-          return updated;
-        });
-        const newPage = await generateNextPage(storyConfig, pageIdx, storyPagesRef.current);
-        if (!newPage || recordAllStopRef.current) break;
-        setStoryPages(prev => {
-          const updated = [...prev];
-          updated[pageIdx] = newPage;
-          return updated;
-        });
+  const handleRecordingsSaved = useCallback((recordings: Record<number, string>) => {
+    // Merge the blob URLs from the modal into storyPages
+    setStoryPages(prev => {
+      const updated = [...prev];
+      for (const [idxStr, url] of Object.entries(recordings)) {
+        const idx = Number(idxStr);
+        if (updated[idx]) {
+          if (updated[idx].userRecordingUrl) URL.revokeObjectURL(updated[idx].userRecordingUrl!);
+          updated[idx] = { ...updated[idx], userRecordingUrl: url };
+        }
       }
-
-      setCurrentPageIndex(pageIdx);
-      setIsRecording(true);
-
-      // Wait for user to record this page (stop is triggered externally)
-      try {
-        await startRecordingPage(pageIdx);
-      } catch {
-        alert('Microphone access required for recording.');
-        break;
-      }
-
-      // Wait for user to hit Stop (mediaRecorder.stop fires onstop)
-      // The stop comes from handleStopRecording — we just wait for isRecording to go false
-      await new Promise<void>(resolve => {
-        const interval = setInterval(() => {
-          if (mediaRecorderRef.current?.state !== 'recording') {
-            clearInterval(interval);
-            resolve();
-          }
-        }, 100);
-      });
-
-      setIsRecording(false);
-      if (recordAllStopRef.current) break;
-
-      // Short pause before next page prompt
-      await new Promise(resolve => setTimeout(resolve, 500));
-      pageIdx++;
-    }
-
+      return updated;
+    });
+    setShowRecordAllModal(false);
     setIsRecordingAll(false);
-    setIsRecording(false);
-  }, [storyConfig, generateNextPage, startRecordingPage]);
+  }, []);
+
+  const handleCloseRecordAllModal = useCallback(() => {
+    setShowRecordAllModal(false);
+    setIsRecordingAll(false);
+  }, []);
 
   const handleDeleteRecording = useCallback(() => {
     const url = storyPages[currentPageIndex]?.userRecordingUrl;
@@ -553,9 +570,11 @@ const handleGoHome = useCallback(() => {
     return (
       <HomeScreen
         onGenerate={handleGenerate}
-        savedSession={savedSession}
+        savedSessions={allSavedSessions}
         onContinueSession={handleContinueSession}
-        onClearSession={() => { clearSession(); setSavedSession(null); }}
+        onDeleteSession={handleDeleteSession}
+        onDownloadSessionPDF={handleDownloadSessionPDF}
+        onClearSession={() => { clearSession(); setSavedSession(null); setAllSavedSessions([]); }}
       />
     );
   }
@@ -581,20 +600,17 @@ const handleGoHome = useCallback(() => {
         />
       )}
 
-      {/* Recording/Playing all banner */}
-      {(isRecordingAll || isPlayingAll) && storyConfig && (
+      {/* Playing all banner */}
+      {isPlayingAll && storyConfig && (
         <StoryModeBanner
-          mode={isRecordingAll ? 'recording' : 'playing'}
+          mode="playing"
           currentPage={currentPageIndex + 1}
           totalPages={storyConfig.pageCount}
-          onStop={() => {
-            if (isRecordingAll) handleStopRecording();
-            else stopReading();
-          }}
+          onStop={stopReading}
         />
       )}
 
-      <header className={`w-full max-w-5xl mb-6 text-center ${isRecordingAll || isPlayingAll ? 'mt-12' : ''}`}>
+      <header className={`w-full max-w-5xl mb-6 text-center ${isPlayingAll ? 'mt-12' : ''}`}>
         <h1 className="text-4xl sm:text-5xl text-purple-600 font-fredoka flex items-center justify-center gap-3">
           <SparklesIcon className="w-8 h-8 text-yellow-400" />
           Pagekin
@@ -643,6 +659,19 @@ const handleGoHome = useCallback(() => {
           isSavingPDF={isGeneratingAll || showDownloadModal}
         />
       </footer>
+
+      {showRecordAllModal && storyConfig && (
+        <RecordAllModal
+          pages={storyPages}
+          config={storyConfig}
+          startPageIndex={currentPageIndex}
+          onRecordingsSaved={handleRecordingsSaved}
+          onClose={handleCloseRecordAllModal}
+          onGeneratePage={(pageIndex, existingPages) =>
+            generateNextPage(storyConfig, pageIndex, existingPages)
+          }
+        />
+      )}
 
       {showDownloadModal && storyConfig && (
         <DownloadModal
