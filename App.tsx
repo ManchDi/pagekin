@@ -204,9 +204,7 @@ const App: React.FC = () => {
 
   // ── Handle "Generate Story" ────────────────────────────────────────────────
   const handleGenerate = useCallback(async (config: StoryConfig) => {
-    clearSession();
     setSavedSession(null);
-    setAllSavedSessions([]);
     setStoryConfig(config);
     setScreen('loading');
     setStoryPages([]);
@@ -481,15 +479,17 @@ const handleGoHome = useCallback(() => {
   }, [storyConfig, stopReading]);
 
   const handleRecordingsSaved = useCallback((recordings: Record<number, string>) => {
-    // Merge the blob URLs from the modal into storyPages
     setStoryPages(prev => {
       const updated = [...prev];
       for (const [idxStr, url] of Object.entries(recordings)) {
         const idx = Number(idxStr);
         if (updated[idx]) {
+          // Page exists — just attach the recording
           if (updated[idx].userRecordingUrl) URL.revokeObjectURL(updated[idx].userRecordingUrl!);
           updated[idx] = { ...updated[idx], userRecordingUrl: url };
         }
+        // If page doesn't exist here, onPageGenerated should have already synced it —
+        // but if somehow it didn't, we skip rather than crash.
       }
       return updated;
     });
@@ -670,6 +670,13 @@ const handleGoHome = useCallback(() => {
           onGeneratePage={(pageIndex, existingPages) =>
             generateNextPage(storyConfig, pageIndex, existingPages)
           }
+          onPageGenerated={(pageIndex, page) => {
+            setStoryPages(prev => {
+              const updated = [...prev];
+              updated[pageIndex] = page;
+              return updated;
+            });
+          }}
         />
       )}
 

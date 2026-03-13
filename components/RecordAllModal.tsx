@@ -12,6 +12,7 @@ interface RecordAllModalProps {
   onRecordingsSaved: (recordings: Record<number, string>) => void;
   onClose: () => void;
   onGeneratePage: (pageIndex: number, existingPages: StoryPage[]) => Promise<StoryPage | null>;
+  onPageGenerated: (pageIndex: number, page: StoryPage) => void; // push generated pages back to App
 }
 
 type RecordState = 'idle' | 'recording' | 'done';
@@ -23,6 +24,7 @@ const RecordAllModal: React.FC<RecordAllModalProps> = ({
   onRecordingsSaved,
   onClose,
   onGeneratePage,
+  onPageGenerated,
 }) => {
   const totalPages = config.pageCount;
 
@@ -61,6 +63,7 @@ const RecordAllModal: React.FC<RecordAllModalProps> = ({
             updated[modalPageIdx] = newPage;
             return updated;
           });
+          onPageGenerated(modalPageIdx, newPage); // sync back to App
         }
         setIsGenerating(false);
       });
