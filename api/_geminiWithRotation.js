@@ -28,7 +28,14 @@ export async function withGeminiRotation(fn) {
     try {
       return await fn(client);
     } catch (error) {
-      if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
+      const isQuota =
+        error?.status === 429 ||
+        error?.code === 429 ||
+        error?.message?.includes('429') ||
+        error?.message?.includes('quota') ||
+        error?.message?.includes('RESOURCE_EXHAUSTED') ||
+        error?.message?.toLowerCase().includes('resource_exhausted');
+      if (isQuota) {
         lastError = error;
         continue; // try next key
       }
