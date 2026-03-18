@@ -7,9 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 export function getGeminiClients() {
   const keys = [
     process.env.GEMINI_API_KEY_1,
-    process.env.GEMINI_API_KEY_2,
-    process.env.GEMINI_API_KEY_3,
-    process.env.GEMINI_API_KEY, // legacy fallback
+ // legacy fallback
   ].filter(Boolean);
 
   if (keys.length === 0) throw new Error('No Gemini API keys configured');
