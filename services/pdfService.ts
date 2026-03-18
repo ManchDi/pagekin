@@ -157,5 +157,19 @@ export async function generateStoryPDF(
     ? `${config.childName.toLowerCase().replace(/\s+/g, '-')}-story.pdf`
     : 'pagekin-story.pdf';
 
-  doc.save(filename);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  if (isMobile) {
+    // Mobile browsers block <a download> — open in new tab instead
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const tab = window.open(url, '_blank');
+    if (!tab) {
+      // Popup blocked fallback — inline data URL
+      window.location.href = doc.output('datauri');
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } else {
+    doc.save(filename);
+  }
 }
